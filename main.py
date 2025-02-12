@@ -16,23 +16,23 @@ def calculate_decision():
         updated_edge = (1 / o_live) - (1 / o_model)
         
         # Adjust base probability of a goal as time progresses
-        p_goal = max(0.50 - 0.005 * match_time, 0.10)  # Starts at 50%, decreases over time
+        p_goal = max(0.50 - 0.0045 * match_time, 0.10)  # More gradual decay
         
         # Increase probability based on shots on target
         total_sot = sot_home + sot_away
-        p_goal += 0.025 * total_sot  # Increased shot contribution per shot
+        p_goal += 0.020 * total_sot  # Reduced weight per shot
         p_goal = min(p_goal, 0.75)  # Cap probability at 75%
         
         # Adjust if underdog is leading (increases chance of a goal)
         if underdog_goals > fav_goals:
-            p_goal += 0.05
+            p_goal += 0.04
         elif fav_goals > underdog_goals:
-            p_goal -= 0.05
+            p_goal -= 0.04
         
         p_goal = min(max(p_goal, 0), 1.0)  # Keep within 0-100%
 
-        # Expected Value Calculations
-        ev_hold = p_goal * 1 - (1 - p_goal) * 1  # Adjusted to reflect realistic EV
+        # Improved Expected Value (EV) Calculations
+        ev_hold = (1 - p_goal) * (1 / o_live) - p_goal * (1 / o_model)  # More balanced EV model
         ev_cashout = 1 / o_live  # Cashout value approximation
         
         # Decision Logic
@@ -42,7 +42,7 @@ def calculate_decision():
             decision = "Hold"  # If draw odds are very high (10+) or goal diff is 3+, hold
         elif p_goal >= 0.65:
             decision = "Hold"  # If goal probability is very high, hold
-        elif ev_hold > ev_cashout:
+        elif ev_hold > ev_cashout or match_time < 60:  # Ensures we don't cash out too early
             decision = "Hold"
         else:
             decision = "Cash Out"
