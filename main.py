@@ -66,6 +66,10 @@ def calculate_decision():
         else:
             decision = "Cash Out"
         
+        # Stronger checks for underdog's high xG and shots on target
+        if xg_underdog >= 2.0 and sot_underdog >= 4:
+            decision = "Cash Out"  # Cash out if underdog has high xG and shots on target
+
         # Additional checks for favorite team leading with more shots and less time
         if match_time >= 80 and fav_goals > underdog_goals and sot_fav > sot_underdog:
             decision = "Hold"  # Hold if favorite is leading, has more shots, and less time left
