@@ -11,6 +11,8 @@ def calculate_decision():
         match_time = int(entry_match_time.get())
         fav_goals = int(entry_fav_goals.get())
         underdog_goals = int(entry_underdog_goals.get())
+        xg_fav = float(entry_xg_fav.get())
+        xg_underdog = float(entry_xg_underdog.get())
 
         # Calculate updated edge
         updated_edge = (1 / o_live) - (1 / o_model)
@@ -20,8 +22,13 @@ def calculate_decision():
         
         # Increase probability based on shots on target
         total_sot = sot_fav + sot_underdog
-        p_goal += 0.020 * total_sot  # Reduced weight per shot
-        p_goal = min(p_goal, 0.75)  # Cap probability at 75%
+        if total_sot < 6:
+            p_goal -= 0.05  # Decrease probability if total shots on target are low
+        else:
+            p_goal += 0.020 * total_sot  # Reduced weight per shot
+
+        # Cap probability within bounds
+        p_goal = min(p_goal, 0.75)
         
         # Adjust if underdog is leading (increases chance of a goal)
         if underdog_goals > fav_goals:
@@ -29,7 +36,15 @@ def calculate_decision():
         elif fav_goals > underdog_goals:
             p_goal -= 0.04
         
-        p_goal = min(max(p_goal, 0), 1.0)  # Keep within 0-100%
+        # Factor in expected goals (xG)
+        combined_xg = xg_fav + xg_underdog
+        if combined_xg < 1.2:
+            p_goal -= 0.10  # Decrease probability if combined xG for both teams is low
+        else:
+            p_goal += 0.02 * combined_xg  # Add weight for xG
+        
+        # Ensure probability stays within 0-100%
+        p_goal = min(max(p_goal, 0), 1.0)
 
         # Improved Expected Value (EV) Calculations
         ev_hold = (1 - p_goal) * (1 / o_live) - p_goal * (1 / o_model)  # More balanced EV model
@@ -42,6 +57,10 @@ def calculate_decision():
             decision = "Hold"  # If draw odds are very high (10+) or goal diff is 3+, hold
         elif p_goal >= 0.65:
             decision = "Hold"  # If goal probability is very high, hold
+        elif fav_goals - underdog_goals >= 2 and xg_fav > xg_underdog:
+            decision = "Hold"  # If favorite is leading by 2+ goals and has higher xG, hold
+        elif (sot_underdog >= sot_fav * 0.75 and xg_underdog >= xg_fav * 1.5) or xg_underdog >= 2:
+            decision = "Cash Out"  # If underdog has significant shots and xG, or xG >= 2, cash out
         elif ev_hold > ev_cashout or match_time < 60:  # Ensures we don't cash out too early
             decision = "Hold"
         else:
@@ -76,7 +95,9 @@ fields = [
     ("Shots on Target (Underdog)", "entry_sot_underdog"),
     ("Match Time (Minutes)", "entry_match_time"),
     ("Goals by Favorite Team", "entry_fav_goals"),
-    ("Goals by Underdog Team", "entry_underdog_goals")
+    ("Goals by Underdog Team", "entry_underdog_goals"),
+    ("Expected Goals (Favorite)", "entry_xg_fav"),
+    ("Expected Goals (Underdog)", "entry_xg_underdog")
 ]
 
 entries = {}
@@ -96,6 +117,8 @@ entry_sot_underdog = entries["entry_sot_underdog"]
 entry_match_time = entries["entry_match_time"]
 entry_fav_goals = entries["entry_fav_goals"]
 entry_underdog_goals = entries["entry_underdog_goals"]
+entry_xg_fav = entries["entry_xg_fav"]
+entry_xg_underdog = entries["entry_xg_underdog"]
 
 # Buttons
 calculate_button = ttk.Button(root, text="Calculate Decision", command=calculate_decision)
