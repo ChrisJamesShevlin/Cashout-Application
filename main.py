@@ -6,8 +6,8 @@ def calculate_decision():
         o_model = float(entry_model_odds.get())
         o_bookmaker = float(entry_bookmaker_odds.get())
         o_live = float(entry_live_odds.get())
-        sot_home = int(entry_sot_home.get())
-        sot_away = int(entry_sot_away.get())
+        sot_fav = int(entry_sot_fav.get())
+        sot_underdog = int(entry_sot_underdog.get())
         match_time = int(entry_match_time.get())
         fav_goals = int(entry_fav_goals.get())
         underdog_goals = int(entry_underdog_goals.get())
@@ -19,7 +19,7 @@ def calculate_decision():
         p_goal = max(0.50 - 0.0045 * match_time, 0.10)  # More gradual decay
         
         # Increase probability based on shots on target
-        total_sot = sot_home + sot_away
+        total_sot = sot_fav + sot_underdog
         p_goal += 0.020 * total_sot  # Reduced weight per shot
         p_goal = min(p_goal, 0.75)  # Cap probability at 75%
         
@@ -47,6 +47,10 @@ def calculate_decision():
         else:
             decision = "Cash Out"
         
+        # Additional checks for favorite team leading with more shots and less time
+        if match_time >= 80 and fav_goals > underdog_goals and sot_fav > sot_underdog:
+            decision = "Hold"  # Hold if favorite is leading, has more shots, and less time left
+
         result_label["text"] = (f"Updated Edge: {updated_edge:.4f}\n"
                                  f"Goal Probability: {p_goal:.2%}\n"
                                  f"EV Hold: {ev_hold:.4f}\n"
@@ -68,8 +72,8 @@ fields = [
     ("Your Model Draw Odds", "entry_model_odds"),
     ("Bookmaker Draw Odds", "entry_bookmaker_odds"),
     ("Current Live Draw Odds", "entry_live_odds"),
-    ("Shots on Target (Home)", "entry_sot_home"),
-    ("Shots on Target (Away)", "entry_sot_away"),
+    ("Shots on Target (Favorite)", "entry_sot_fav"),
+    ("Shots on Target (Underdog)", "entry_sot_underdog"),
     ("Match Time (Minutes)", "entry_match_time"),
     ("Goals by Favorite Team", "entry_fav_goals"),
     ("Goals by Underdog Team", "entry_underdog_goals")
@@ -87,8 +91,8 @@ for i, (label_text, var_name) in enumerate(fields):
 entry_model_odds = entries["entry_model_odds"]
 entry_bookmaker_odds = entries["entry_bookmaker_odds"]
 entry_live_odds = entries["entry_live_odds"]
-entry_sot_home = entries["entry_sot_home"]
-entry_sot_away = entries["entry_sot_away"]
+entry_sot_fav = entries["entry_sot_fav"]
+entry_sot_underdog = entries["entry_sot_underdog"]
 entry_match_time = entries["entry_match_time"]
 entry_fav_goals = entries["entry_fav_goals"]
 entry_underdog_goals = entries["entry_underdog_goals"]
