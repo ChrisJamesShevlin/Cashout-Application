@@ -51,38 +51,24 @@ def calculate_decision():
         ev_hold = (1 - p_goal) * (1 / match_data.live_odds) - p_goal * (1 / match_data.model_odds)
         ev_cashout = 1 / match_data.live_odds
         
-        underdog_lead = match_data.underdog_goals - match_data.fav_goals
-        underdog_dominating = (
-            (match_data.xg_underdog >= match_data.xg_fav + 0.3) +
-            (match_data.sot_underdog > match_data.sot_fav) +
-            (match_data.possession_fav < 45)
-        ) >= 2
-        
-        favorite_comeback_potential = (
-            match_data.xg_fav > 1.5 and
-            match_data.sot_fav >= 6 and
-            match_data.possession_fav > 55
-        )
-        
+        possession_gap = abs(match_data.possession_fav - match_data.possession_underdog)
         likely_draw = (
-            p_goal < 0.15 and
-            abs(match_data.possession_fav - match_data.possession_underdog) <= 5 and
+            p_goal < 0.12 and
+            possession_gap <= 10 and
             abs(match_data.xg_fav - match_data.xg_underdog) < 0.3 and
             abs(match_data.sot_fav - match_data.sot_underdog) <= 2 and
-            match_data.match_time >= 70 and
+            match_data.match_time >= 80 and
             match_data.fav_goals == match_data.underdog_goals
         )
         
         decision = "Hold"
         if likely_draw:
             decision = "Cash Out"
-        elif ev_hold < 0 and not favorite_comeback_potential:
+        elif ev_cashout > ev_hold + 0.05 and match_data.match_time >= 80:
             decision = "Cash Out"
-        if match_data.match_time >= 80:
-            if underdog_lead >= 2 and underdog_dominating:
-                decision = "Hold"
-            elif favorite_comeback_potential:
-                decision = "Cash Out"
+        
+        if match_data.match_time >= 85 and p_goal < 12 / 100:
+            decision = "Cash Out"
 
         result_label["text"] = (
             f"Updated Edge: {updated_edge:.4f}\n"
