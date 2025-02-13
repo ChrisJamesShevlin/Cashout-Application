@@ -1,93 +1,104 @@
 import tkinter as tk
 from tkinter import ttk
+from dataclasses import dataclass
+
+@dataclass
+class MatchData:
+    model_odds: float
+    bookmaker_odds: float
+    live_odds: float
+    sot_fav: int
+    sot_underdog: int
+    match_time: int
+    fav_goals: int
+    underdog_goals: int
+    xg_fav: float
+    xg_underdog: float
+    possession_fav: float
+    possession_underdog: float
 
 def calculate_decision():
     try:
-        o_model = float(entry_model_odds.get())
-        o_bookmaker = float(entry_bookmaker_odds.get())
-        o_live = float(entry_live_odds.get())
-        sot_fav = int(entry_sot_fav.get())
-        sot_underdog = int(entry_sot_underdog.get())
-        match_time = int(entry_match_time.get())
-        fav_goals = int(entry_fav_goals.get())
-        underdog_goals = int(entry_underdog_goals.get())
-        xg_fav = float(entry_xg_fav.get())
-        xg_underdog = float(entry_xg_underdog.get())
+        # Read input values
+        match_data = MatchData(
+            model_odds=float(entries["entry_model_odds"].get()),
+            bookmaker_odds=float(entries["entry_bookmaker_odds"].get()),
+            live_odds=float(entries["entry_live_odds"].get()),
+            sot_fav=int(entries["entry_sot_fav"].get()),
+            sot_underdog=int(entries["entry_sot_underdog"].get()),
+            match_time=int(entries["entry_match_time"].get()),
+            fav_goals=int(entries["entry_fav_goals"].get()),
+            underdog_goals=int(entries["entry_underdog_goals"].get()),
+            xg_fav=float(entries["entry_xg_fav"].get()),
+            xg_underdog=float(entries["entry_xg_underdog"].get()),
+            possession_fav=float(entries["entry_possession_fav"].get()),
+            possession_underdog=float(entries["entry_possession_underdog"].get())
+        )
 
         # Calculate updated edge
-        updated_edge = (1 / o_live) - (1 / o_model)
-        
-        # Adjust base probability of a goal as time progresses
-        p_goal = max(0.50 - 0.0045 * match_time, 0.10)  # More gradual decay
-        
-        # Increase probability based on shots on target
-        total_sot = sot_fav + sot_underdog
-        if total_sot < 6:
-            p_goal -= 0.05  # Decrease probability if total shots on target are low
-        else:
-            p_goal += 0.020 * total_sot  # Reduced weight per shot
+        updated_edge = (1 / match_data.live_odds) - (1 / match_data.model_odds)
 
-        # Cap probability within bounds
-        p_goal = min(p_goal, 0.75)
-        
-        # Adjust if underdog is leading (increases chance of a goal)
-        if underdog_goals > fav_goals:
-            p_goal += 0.04
-        elif fav_goals > underdog_goals:
-            p_goal -= 0.04
-        
-        # Factor in expected goals (xG)
-        combined_xg = xg_fav + xg_underdog
-        if combined_xg < 1.2:
-            p_goal -= 0.10  # Decrease probability if combined xG for both teams is low
-        else:
-            p_goal += 0.02 * combined_xg  # Add weight for xG
-        
-        # Ensure probability stays within 0-100%
+        # Probability of a goal occurring
+        p_goal = max(0.50 - 0.0045 * match_data.match_time, 0.10)
+
+        # Shots on Target (SOT) Adjustment
+        total_sot = match_data.sot_fav + match_data.sot_underdog
+        p_goal += 0.020 * total_sot if total_sot >= 6 else -0.05
+
+        # Expected Goals (xG) Adjustment
+        combined_xg = match_data.xg_fav + match_data.xg_underdog
+        p_goal += 0.02 * combined_xg if combined_xg >= 1.2 else -0.10
+
+        # Adjust for scoreline impact
+        if match_data.underdog_goals > match_data.fav_goals:
+            p_goal += 0.04  # Underdog is leading
+        elif match_data.fav_goals > match_data.underdog_goals:
+            p_goal -= 0.04  # Favorite is leading
+
+        # Ensure probability is within valid range
         p_goal = min(max(p_goal, 0), 1.0)
 
-        # Improved Expected Value (EV) Calculations
-        ev_hold = (1 - p_goal) * (1 / o_live) - p_goal * (1 / o_model)  # More balanced EV model
-        ev_cashout = 1 / o_live  # Cashout value approximation
-        
-        # Decision Logic
-        if match_time >= 75 and total_sot == 0 and o_live < 2.5:
-            decision = "Cash Out"  # If no shots and draw odds are low, cash out
-        elif o_live > 10 or abs(fav_goals - underdog_goals) >= 3:
-            decision = "Hold"  # If draw odds are very high (10+) or goal diff is 3+, hold
-        elif p_goal >= 0.65:
-            decision = "Hold"  # If goal probability is very high, hold
-        elif fav_goals - underdog_goals >= 2 and xg_fav > xg_underdog:
-            decision = "Hold"  # If favorite is leading by 2+ goals and has higher xG, hold
-        elif (sot_underdog >= sot_fav * 0.75 and xg_underdog >= xg_fav * 1.5) or xg_underdog >= 2:
-            decision = "Cash Out"  # If underdog has significant shots and xG, or xG >= 2, cash out
-        elif ev_hold > ev_cashout or match_time < 60:  # Ensures we don't cash out too early
-            decision = "Hold"
-        else:
+        # Expected Value (EV) calculations
+        ev_hold = (1 - p_goal) * (1 / match_data.live_odds) - p_goal * (1 / match_data.model_odds)
+        ev_cashout = 1 / match_data.live_odds
+
+        # **Generalized Cash-Out Condition Using xG & Possession**
+        if (match_data.xg_underdog >= match_data.xg_fav + 0.3  # Underdog leading in xG
+            or match_data.sot_underdog > match_data.sot_fav  # More shots from underdog
+            or match_data.possession_fav < 45):  # Possession heavily against favorite
             decision = "Cash Out"
-        
-        # Stronger checks for underdog's high xG and shots on target
-        if xg_underdog >= 2.0 and sot_underdog >= 4:
-            decision = "Cash Out"  # Cash out if underdog has high xG and shots on target
+        else:
+            decision = "Hold"
 
-        # Additional checks for favorite team leading with more shots and less time
-        if match_time >= 80 and fav_goals > underdog_goals and sot_fav > sot_underdog:
-            decision = "Hold"  # Hold if favorite is leading, has more shots, and less time left
+        # **Specific Late-Game Hold Condition (80+ Mins)**
+        if (match_data.match_time >= 80 
+            and match_data.fav_goals - match_data.underdog_goals >= 2  # Clear lead
+            and match_data.xg_underdog < 1.0  # Underdog has low xG
+            and match_data.sot_underdog < 3  # Underdog not creating many chances
+            and match_data.possession_fav > 60):  # Favorite is controlling the game
+            decision = "Hold"
 
-        result_label["text"] = (f"Updated Edge: {updated_edge:.4f}\n"
-                                 f"Goal Probability: {p_goal:.2%}\n"
-                                 f"EV Hold: {ev_hold:.4f}\n"
-                                 f"EV Cashout: {ev_cashout:.4f}\n"
-                                 f"Decision: {decision}")
+        # Display results
+        result_label["text"] = (
+            f"Updated Edge: {updated_edge:.4f}\n"
+            f"Goal Probability: {p_goal:.2%}\n"
+            f"EV Hold: {ev_hold:.4f}\n"
+            f"EV Cashout: {ev_cashout:.4f}\n"
+            f"Decision: {decision}"
+        )
+        result_label["foreground"] = "green" if decision == "Hold" else "red"
+
     except ValueError:
         result_label["text"] = "Please enter valid numerical values."
+        result_label["foreground"] = "black"
 
+# Reset Fields
 def reset_fields():
     for entry in entries.values():
         entry.delete(0, tk.END)
     result_label["text"] = ""
 
-# Create GUI window
+# Create GUI
 root = tk.Tk()
 root.title("Lay the Draw - Cash Out Decision")
 
@@ -101,7 +112,9 @@ fields = [
     ("Goals by Favorite Team", "entry_fav_goals"),
     ("Goals by Underdog Team", "entry_underdog_goals"),
     ("Expected Goals (Favorite)", "entry_xg_fav"),
-    ("Expected Goals (Underdog)", "entry_xg_underdog")
+    ("Expected Goals (Underdog)", "entry_xg_underdog"),
+    ("Possession (Favorite %)", "entry_possession_fav"),
+    ("Possession (Underdog %)", "entry_possession_underdog")
 ]
 
 entries = {}
@@ -112,19 +125,6 @@ for i, (label_text, var_name) in enumerate(fields):
     entry.grid(row=i, column=1, padx=10, pady=5)
     entries[var_name] = entry
 
-# Assign entries to variables
-entry_model_odds = entries["entry_model_odds"]
-entry_bookmaker_odds = entries["entry_bookmaker_odds"]
-entry_live_odds = entries["entry_live_odds"]
-entry_sot_fav = entries["entry_sot_fav"]
-entry_sot_underdog = entries["entry_sot_underdog"]
-entry_match_time = entries["entry_match_time"]
-entry_fav_goals = entries["entry_fav_goals"]
-entry_underdog_goals = entries["entry_underdog_goals"]
-entry_xg_fav = entries["entry_xg_fav"]
-entry_xg_underdog = entries["entry_xg_underdog"]
-
-# Buttons
 calculate_button = ttk.Button(root, text="Calculate Decision", command=calculate_decision)
 calculate_button.grid(row=len(fields), column=0, columnspan=2, pady=10)
 
