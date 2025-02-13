@@ -1,21 +1,19 @@
 import tkinter as tk
-from tkinter import ttk
-from dataclasses import dataclass
 
-@dataclass
 class MatchData:
-    model_odds: float
-    bookmaker_odds: float
-    live_odds: float
-    sot_fav: int
-    sot_underdog: int
-    match_time: int
-    fav_goals: int
-    underdog_goals: int
-    xg_fav: float
-    xg_underdog: float
-    possession_fav: float
-    possession_underdog: float
+    def __init__(self, model_odds, bookmaker_odds, live_odds, sot_fav, sot_underdog, match_time, fav_goals, underdog_goals, xg_fav, xg_underdog, possession_fav, possession_underdog):
+        self.model_odds = model_odds
+        self.bookmaker_odds = bookmaker_odds
+        self.live_odds = live_odds
+        self.sot_fav = sot_fav
+        self.sot_underdog = sot_underdog
+        self.match_time = match_time
+        self.fav_goals = fav_goals
+        self.underdog_goals = underdog_goals
+        self.xg_fav = xg_fav
+        self.xg_underdog = xg_underdog
+        self.possession_fav = possession_fav
+        self.possession_underdog = possession_underdog
 
 def calculate_decision():
     try:
@@ -62,21 +60,32 @@ def calculate_decision():
         ev_hold = (1 - p_goal) * (1 / match_data.live_odds) - p_goal * (1 / match_data.model_odds)
         ev_cashout = 1 / match_data.live_odds
 
-        # **Generalized Cash-Out Condition Using xG & Possession**
-        if (match_data.xg_underdog >= match_data.xg_fav + 0.3  # Underdog leading in xG
-            or match_data.sot_underdog > match_data.sot_fav  # More shots from underdog
-            or match_data.possession_fav < 45):  # Possession heavily against favorite
-            decision = "Cash Out"
-        else:
-            decision = "Hold"
+        # New Cash-Out Logic
+        underdog_lead = match_data.underdog_goals - match_data.fav_goals
+        underdog_dominating = (
+            (match_data.xg_underdog >= match_data.xg_fav + 0.3) +
+            (match_data.sot_underdog > match_data.sot_fav) +
+            (match_data.possession_fav < 45)
+        ) >= 2  # Needs at least 2 out of 3 conditions
 
-        # **Specific Late-Game Hold Condition (80+ Mins)**
-        if (match_data.match_time >= 80 
-            and match_data.fav_goals - match_data.underdog_goals >= 2  # Clear lead
-            and match_data.xg_underdog < 1.0  # Underdog has low xG
-            and match_data.sot_underdog < 3  # Underdog not creating many chances
-            and match_data.possession_fav > 60):  # Favorite is controlling the game
-            decision = "Hold"
+        favorite_comeback_potential = (
+            match_data.xg_fav > 1.5 and
+            match_data.sot_fav >= 6 and
+            match_data.possession_fav > 55
+        )
+
+        # Default to Hold if Underdog is Leading & Dominating
+        decision = "Hold"
+        # But Cash Out if Favorite is Showing Strong Comeback Potential
+        if favorite_comeback_potential:
+            decision = "Cash Out"
+
+        # Late-Game Adjustments
+        if match_data.match_time >= 80:
+            if underdog_lead >= 2 and underdog_dominating:
+                decision = "Hold"
+            elif favorite_comeback_potential:
+                decision = "Cash Out"
 
         # Display results
         result_label["text"] = (
@@ -92,46 +101,41 @@ def calculate_decision():
         result_label["text"] = "Please enter valid numerical values."
         result_label["foreground"] = "black"
 
-# Reset Fields
 def reset_fields():
     for entry in entries.values():
         entry.delete(0, tk.END)
     result_label["text"] = ""
 
-# Create GUI
+# Initialize the GUI
 root = tk.Tk()
-root.title("Lay the Draw - Cash Out Decision")
+root.title("Decision Calculator")
 
-fields = [
-    ("Your Model Draw Odds", "entry_model_odds"),
-    ("Bookmaker Draw Odds", "entry_bookmaker_odds"),
-    ("Current Live Draw Odds", "entry_live_odds"),
-    ("Shots on Target (Favorite)", "entry_sot_fav"),
-    ("Shots on Target (Underdog)", "entry_sot_underdog"),
-    ("Match Time (Minutes)", "entry_match_time"),
-    ("Goals by Favorite Team", "entry_fav_goals"),
-    ("Goals by Underdog Team", "entry_underdog_goals"),
-    ("Expected Goals (Favorite)", "entry_xg_fav"),
-    ("Expected Goals (Underdog)", "entry_xg_underdog"),
-    ("Possession (Favorite %)", "entry_possession_fav"),
-    ("Possession (Underdog %)", "entry_possession_underdog")
-]
+# Define the entry fields and result label
+entries = {
+    "entry_model_odds": tk.Entry(root),
+    "entry_bookmaker_odds": tk.Entry(root),
+    "entry_live_odds": tk.Entry(root),
+    "entry_sot_fav": tk.Entry(root),
+    "entry_sot_underdog": tk.Entry(root),
+    "entry_match_time": tk.Entry(root),
+    "entry_fav_goals": tk.Entry(root),
+    "entry_underdog_goals": tk.Entry(root),
+    "entry_xg_fav": tk.Entry(root),
+    "entry_xg_underdog": tk.Entry(root),
+    "entry_possession_fav": tk.Entry(root),
+    "entry_possession_underdog": tk.Entry(root)
+}
 
-entries = {}
-for i, (label_text, var_name) in enumerate(fields):
-    label = tk.Label(root, text=label_text)
-    label.grid(row=i, column=0, padx=10, pady=5, sticky="w")
-    entry = ttk.Entry(root)
-    entry.grid(row=i, column=1, padx=10, pady=5)
-    entries[var_name] = entry
+result_label = tk.Label(root, text="", font=("Helvetica", 12))
 
-calculate_button = ttk.Button(root, text="Calculate Decision", command=calculate_decision)
-calculate_button.grid(row=len(fields), column=0, columnspan=2, pady=10)
+# Layout the entry fields and result label
+for i, (key, entry) in enumerate(entries.items()):
+    tk.Label(root, text=key.replace("entry_", "").replace("_", " ").title()).grid(row=i, column=0)
+    entry.grid(row=i, column=1)
 
-reset_button = ttk.Button(root, text="Reset Fields", command=reset_fields)
-reset_button.grid(row=len(fields) + 1, column=0, columnspan=2, pady=10)
+tk.Button(root, text="Calculate Decision", command=calculate_decision).grid(row=len(entries), column=0, columnspan=2)
+tk.Button(root, text="Reset Fields", command=reset_fields).grid(row=len(entries) + 1, column=0, columnspan=2)
+result_label.grid(row=len(entries) + 2, column=0, columnspan=2)
 
-result_label = tk.Label(root, text="", font=("Helvetica", 14))
-result_label.grid(row=len(fields) + 2, column=0, columnspan=2, pady=10)
-
+# Start the GUI event loop
 root.mainloop()
